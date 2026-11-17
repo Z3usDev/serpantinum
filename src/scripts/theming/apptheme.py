@@ -857,6 +857,18 @@ def dump_json(data, indent):
     return json.dumps(data, indent=indent, ensure_ascii=False) + "\n"
 
 
+def json_present(text, values, append):
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return False
+    if not isinstance(data, dict):
+        return False
+    if any(data.get(key) != value for key, value in values.items()):
+        return False
+    return all(isinstance(data.get(key), list) and item in data[key] for key, item in append.items())
+
+
 def apply_json(ctx, spec, mode, record):
     path, exists = resolve_file(ctx, spec, mode)
     values = json_values(ctx, spec, mode)
@@ -872,6 +884,9 @@ def apply_json(ctx, spec, mode, record):
         if hidden:
             return False, {"code": "system_config", "file": str(hidden), "line": hint}
     if not writable_target(path):
+        # Same as apply_line: a read-only file that already has everything is integrated.
+        if exists and json_present(read_text(path), values, append):
+            return False, None
         return False, {"code": "read_only", "file": str(path), "line": hint}
     original = read_text(path) if exists else ""
     data = {}
